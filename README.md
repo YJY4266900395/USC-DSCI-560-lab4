@@ -1,3 +1,4 @@
+Lab4
 1. Overview
 In this lab, we analyze stock price data and build an algorithmic trading strategy that generates buy/sell signals.
 We then test the strategy in a mock trading environment and evaluate performance using standard portfolio metrics.
