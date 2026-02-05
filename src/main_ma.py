@@ -55,7 +55,7 @@ def main():
     )
 
     args = parser.parse_args()
-    
+
     # Configuration
     ticker = args.ticker.upper()
     initial_cash = 10000.0
@@ -104,6 +104,28 @@ def main():
         trades_df.to_csv("outputs_ma/trades.csv", index=False)
     
     plot_portfolio_value(portfolio_df, "outputs_ma/portfolio_value.png")
+
+    # Save metrics to text file
+    with open("outputs_ma/metrics_summary.txt", 'w') as f:
+        f.write("="*70 + "\n")
+        f.write("DSCI-560 LAB 4: PORTFOLIO PERFORMANCE METRICS\n")
+        f.write("="*70 + "\n\n")
+        f.write(f"Strategy: MA with Confidence-Based Allocation\n")
+        f.write(f"Tickers: {ticker}\n")
+        f.write(f"Initial Cash: ${initial_cash:,.2f}\n")
+        f.write(f"Windows: Short={short_window}, Long={long_window}\n\n")
+        f.write("-"*70 + "\n")
+        f.write("RESULTS\n")
+        f.write("-"*70 + "\n")
+        for key, value in metrics.items():
+            if isinstance(value, float):
+                if 'return' in key.lower() or 'volatility' in key.lower() or 'drawdown' in key.lower():
+                    f.write(f"{key.replace('_', ' ').title():<25} {value:>15.2%}\n")
+                else:
+                    f.write(f"{key.replace('_', ' ').title():<25} {value:>15.2f}\n")
+            else:
+                f.write(f"{key.replace('_', ' ').title():<25} {value:>15}\n")
+        f.write("="*70 + "\n")
     
     print(f"\n[SAVED] Results saved to outputs_ma/")
     

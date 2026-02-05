@@ -302,6 +302,7 @@ def main():
         f.write(f"Strategy: LSTM with Confidence-Based Allocation\n")
         f.write(f"Tickers: {', '.join(args.tickers)}\n")
         f.write(f"Date Range: {args.start} to {args.end}\n")
+        f.write(f"Threshold: {args.threshold:.2%}\n")
         f.write(f"Initial Cash: ${args.cash:,.2f}\n\n")
         f.write("-"*70 + "\n")
         f.write("RESULTS\n")
