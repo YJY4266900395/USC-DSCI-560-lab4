@@ -1,5 +1,5 @@
 """
-File: strategy_lstm.py
+File: strategy_lstm.py (PyTorch version)
 Purpose:
   LSTM-based trading strategy for stock price prediction using PyTorch.
   Generates buy/sell signals with confidence scores.
@@ -76,7 +76,7 @@ def create_sequences(data, window_size=30):
     return np.array(X), np.array(y)
 
 
-def train_lstm(price_series: pd.Series, window_size=30, epochs=50, batch_size=32, verbose=0):
+def train_lstm(price_series: pd.Series, window_size=30, epochs=100, batch_size=32, verbose=0):
     """
     Train LSTM model on price data using PyTorch
     
@@ -103,16 +103,16 @@ def train_lstm(price_series: pd.Series, window_size=30, epochs=50, batch_size=32
     # Train/test split (80/20)
     train_size = int(len(X) * 0.8)
     X_train = torch.FloatTensor(X[:train_size]).to(device)
-    y_train = torch.FloatTensor(y[:train_size]).to(device)
+    y_train = torch.FloatTensor(y[:train_size]).reshape(-1, 1).to(device)  # FIX: Add .reshape(-1, 1)
     X_test = torch.FloatTensor(X[train_size:]).to(device)
-    y_test = torch.FloatTensor(y[train_size:]).to(device)
+    y_test = torch.FloatTensor(y[train_size:]).reshape(-1, 1).to(device)  # FIX: Add .reshape(-1, 1)
     
     # Build model
     model = LSTMModel(input_size=1, hidden_size=50, num_layers=2, dropout=0.2).to(device)
     criterion = nn.MSELoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.0001)  # Lower learning rate: 0.001 → 0.0001
     
-    print(f"Training LSTM model... (epochs={epochs})")
+    print(f"Training LSTM model... (epochs={epochs}, lr=0.0001)")
     
     # Training loop
     model.train()
@@ -126,8 +126,9 @@ def train_lstm(price_series: pd.Series, window_size=30, epochs=50, batch_size=32
         loss.backward()
         optimizer.step()
         
-        if verbose > 0 and (epoch + 1) % 10 == 0:
-            print(f"Epoch [{epoch+1}/{epochs}], Loss: {loss.item():.4f}")
+        # Print every 10 epochs to monitor training
+        if (epoch + 1) % 10 == 0:
+            print(f"  Epoch [{epoch+1}/{epochs}], Loss: {loss.item():.6f}")
     
     # Evaluate
     model.eval()
@@ -304,4 +305,4 @@ if __name__ == "__main__":
     print("\nSample output:")
     print(signals_df.tail(10))
     
-    print("\nLSTM strategy ready!")
+    print("\nPyTorch LSTM strategy ready!")

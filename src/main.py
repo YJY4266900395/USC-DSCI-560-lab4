@@ -174,7 +174,7 @@ def main():
     parser.add_argument(
         "--epochs",
         type=int,
-        default=50,
+        default=100,
         help="LSTM training epochs (default: 50)"
     )
     parser.add_argument(
@@ -200,7 +200,7 @@ def main():
     parser.add_argument(
         "--conf_bonus",
         type=float,
-        default=0.30,
+        default=0.20,
         help="Max confidence bonus (default: 0.10 = 10%%)"
     )
     
