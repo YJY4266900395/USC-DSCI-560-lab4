@@ -1,12 +1,8 @@
 """
-File: strategy_lstm_stable.py (PyTorch version - STABLE)
+File: strategy_lstm.py (PyTorch version)
 Purpose:
-  LSTM-based trading strategy with STABILITY IMPROVEMENTS:
-  1. Fixed random seed for reproducibility
-  2. Gradient clipping to prevent exploding gradients
-  3. Learning rate scheduler for stable convergence
-  4. Early stopping to prevent overfitting
-  5. Improved weight initialization
+  LSTM-based trading strategy for stock price prediction using PyTorch.
+  Generates buy/sell signals with confidence scores.
 
 Key Features:
   - Uses sliding window approach for time series
@@ -24,43 +20,17 @@ import torch
 import torch.nn as nn
 from sklearn.preprocessing import MinMaxScaler
 import warnings
-import random
 warnings.filterwarnings('ignore')
-
-
-def set_seed(seed=42):
-    """
-    固定所有随机种子，确保结果可复现
-    
-    Args:
-        seed: 随机种子值 (default: 42)
-    """
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed(seed)
-        torch.cuda.manual_seed_all(seed)
-        # 确保CUDNN的确定性行为
-        torch.backends.cudnn.deterministic = True
-        torch.backends.cudnn.benchmark = False
-    
-    print(f"[SEED] Random seed set to {seed} for reproducibility")
 
 
 class LSTMModel(nn.Module):
     """
-    PyTorch LSTM model for stock price prediction (STABLE VERSION)
+    PyTorch LSTM model for stock price prediction
     
     Architecture:
       - LSTM Layer 1 (50 units) + Dropout(0.2)
       - LSTM Layer 2 (50 units) + Dropout(0.2)
       - Fully Connected Layer (1 output)
-    
-    Improvements:
-      - Xavier/He initialization for weights
-      - Gradient clipping ready
     """
     def __init__(self, input_size=1, hidden_size=50, num_layers=2, dropout=0.2):
         super(LSTMModel, self).__init__()
@@ -77,25 +47,6 @@ class LSTMModel(nn.Module):
         )
         
         self.fc = nn.Linear(hidden_size, 1)
-        
-        # 权重初始化
-        self._initialize_weights()
-        
-    def _initialize_weights(self):
-        """
-        使用Xavier初始化提高训练稳定性
-        """
-        for name, param in self.lstm.named_parameters():
-            if 'weight_ih' in name:
-                nn.init.xavier_uniform_(param.data)
-            elif 'weight_hh' in name:
-                nn.init.orthogonal_(param.data)
-            elif 'bias' in name:
-                param.data.fill_(0)
-        
-        # FC层初始化
-        nn.init.xavier_uniform_(self.fc.weight)
-        nn.init.zeros_(self.fc.bias)
         
     def forward(self, x):
         # x shape: (batch_size, seq_length, input_size)
@@ -125,40 +76,15 @@ def create_sequences(data, window_size=30):
     return np.array(X), np.array(y)
 
 
-def train_lstm(
-    price_series: pd.Series, 
-    window_size=30, 
-    epochs=100, 
-    batch_size=32, 
-    verbose=0,
-    seed=42,
-    learning_rate=0.00005,
-    patience=15,
-    min_delta=1e-6
-):
+def train_lstm(price_series: pd.Series, window_size=30, epochs=100, batch_size=32, verbose=0):
     """
-    Train LSTM model on price data using PyTorch (STABLE VERSION)
-    
-    Args:
-        price_series: pandas Series of prices
-        window_size: look-back window
-        epochs: training epochs
-        batch_size: batch size
-        verbose: verbosity level
-        seed: random seed for reproducibility
-        learning_rate: initial learning rate (lowered for stability)
-        patience: early stopping patience
-        min_delta: minimum change to qualify as improvement
+    Train LSTM model on price data using PyTorch
     
     Returns:
         model: trained PyTorch model
         scaler: MinMaxScaler for inverse transform
         train_size: number of training samples
-        device: torch device
     """
-    # 固定随机种子
-    set_seed(seed)
-    
     # Set device
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     if verbose > 0:
@@ -177,96 +103,34 @@ def train_lstm(
     # Train/test split (80/20)
     train_size = int(len(X) * 0.8)
     X_train = torch.FloatTensor(X[:train_size]).to(device)
-    y_train = torch.FloatTensor(y[:train_size]).reshape(-1, 1).to(device)
+    y_train = torch.FloatTensor(y[:train_size]).reshape(-1, 1).to(device)  # FIX: Add .reshape(-1, 1)
     X_test = torch.FloatTensor(X[train_size:]).to(device)
-    y_test = torch.FloatTensor(y[train_size:]).reshape(-1, 1).to(device)
+    y_test = torch.FloatTensor(y[train_size:]).reshape(-1, 1).to(device)  # FIX: Add .reshape(-1, 1)
     
     # Build model
-    model = LSTMModel(
-        input_size=1, 
-        hidden_size=50, 
-        num_layers=2, 
-        dropout=0.2
-    ).to(device)
-    
+    model = LSTMModel(input_size=1, hidden_size=50, num_layers=2, dropout=0.2).to(device)
     criterion = nn.MSELoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.0001)  # Lower learning rate: 0.001 → 0.0001
     
-    # 学习率调度器 (ReduceLROnPlateau for stability)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer, 
-        mode='min', 
-        factor=0.5, 
-        patience=10, 
-        verbose=(verbose > 0),
-        min_lr=1e-7
-    )
-    
-    print(f"Training LSTM model... (epochs={epochs}, lr={learning_rate:.6f}, seed={seed})")
-    print(f"Stability features: Gradient Clipping + LR Scheduler + Early Stopping")
-    
-    # Early stopping variables
-    best_loss = float('inf')
-    patience_counter = 0
-    best_model_state = None
+    print(f"Training LSTM model... (epochs={epochs}, lr=0.0001)")
     
     # Training loop
+    model.train()
     for epoch in range(epochs):
-        model.train()
-        
         # Forward pass
         outputs = model(X_train)
         loss = criterion(outputs, y_train)
         
-        # Check for NaN loss
-        if torch.isnan(loss):
-            print(f"[WARNING] NaN loss detected at epoch {epoch+1}. Stopping training.")
-            break
-        
         # Backward pass
         optimizer.zero_grad()
         loss.backward()
-        
-        # 梯度裁剪 (防止梯度爆炸)
-        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-        
         optimizer.step()
         
-        # Validation loss
-        model.eval()
-        with torch.no_grad():
-            val_outputs = model(X_test)
-            val_loss = criterion(val_outputs, y_test)
-        
-        # Learning rate scheduling
-        scheduler.step(val_loss)
-        
-        # Early stopping check
-        if val_loss < best_loss - min_delta:
-            best_loss = val_loss
-            patience_counter = 0
-            best_model_state = model.state_dict().copy()
-        else:
-            patience_counter += 1
-        
-        # Print progress
+        # Print every 10 epochs to monitor training
         if (epoch + 1) % 10 == 0:
-            current_lr = optimizer.param_groups[0]['lr']
-            print(f"  Epoch [{epoch+1}/{epochs}] | Train Loss: {loss.item():.6f} | "
-                  f"Val Loss: {val_loss.item():.6f} | LR: {current_lr:.7f} | "
-                  f"Patience: {patience_counter}/{patience}")
-        
-        # Early stopping
-        if patience_counter >= patience:
-            print(f"[EARLY STOP] No improvement for {patience} epochs. Stopping at epoch {epoch+1}.")
-            break
+            print(f"  Epoch [{epoch+1}/{epochs}], Loss: {loss.item():.6f}")
     
-    # Load best model
-    if best_model_state is not None:
-        model.load_state_dict(best_model_state)
-        print(f"[LOADED] Best model from validation")
-    
-    # Final evaluation
+    # Evaluate
     model.eval()
     with torch.no_grad():
         train_pred = model(X_train)
@@ -274,7 +138,7 @@ def train_lstm(
         train_loss = criterion(train_pred, y_train).item()
         test_loss = criterion(test_pred, y_test).item()
     
-    print(f"Final Training MSE: {train_loss:.6f} | Final Test MSE: {test_loss:.6f}")
+    print(f"Training MSE: {train_loss:.4f} | Test MSE: {test_loss:.4f}")
     
     return model, scaler, train_size, device
 
@@ -372,15 +236,12 @@ def generate_signals_with_confidence(
 def lstm_strategy(
     price: pd.Series,
     window_size=30,
-    epochs=100,
+    epochs=50,
     threshold=0.02,
-    verbose=0,
-    seed=42,
-    learning_rate=0.00005,
-    patience=15
+    verbose=0
 ) -> pd.DataFrame:
     """
-    Complete LSTM trading strategy pipeline (STABLE VERSION)
+    Complete LSTM trading strategy pipeline (PyTorch version)
     
     Args:
         price: price series with datetime index
@@ -388,30 +249,18 @@ def lstm_strategy(
         epochs: training epochs
         threshold: return threshold for signal generation
         verbose: training verbosity
-        seed: random seed for reproducibility
-        learning_rate: initial learning rate (lowered for stability)
-        patience: early stopping patience
     
     Returns:
         DataFrame with columns: price, prediction, signal, trade, confidence
     """
-    print(f"\n{'='*70}")
-    print(f"Running LSTM Strategy (PyTorch - STABLE)")
+    print(f"\n{'='*60}")
+    print(f"Running LSTM Strategy (PyTorch)")
     print(f"Data points: {len(price)}")
     print(f"Window size: {window_size} | Epochs: {epochs} | Threshold: {threshold:.1%}")
-    print(f"Seed: {seed} | Learning Rate: {learning_rate:.6f} | Patience: {patience}")
-    print(f"{'='*70}")
+    print(f"{'='*60}")
     
     # Train model
-    model, scaler, train_size, device = train_lstm(
-        price, 
-        window_size, 
-        epochs, 
-        verbose=verbose,
-        seed=seed,
-        learning_rate=learning_rate,
-        patience=patience
-    )
+    model, scaler, train_size, device = train_lstm(price, window_size, epochs, verbose=verbose)
     
     # Generate predictions
     predictions = predict_with_lstm(model, scaler, price, window_size, device)
@@ -437,7 +286,7 @@ def lstm_strategy(
     n_buy = (df['trade'] == 1).sum()
     n_sell = (df['trade'] == -1).sum()
     print(f"\nSignals generated: {n_buy} BUY | {n_sell} SELL")
-    print(f"{'='*70}\n")
+    print(f"{'='*60}\n")
     
     return df
 
@@ -446,40 +295,14 @@ def lstm_strategy(
 if __name__ == "__main__":
     # Test with sample data
     dates = pd.date_range('2022-01-01', periods=500, freq='D')
-    
-    # Set seed for test data
-    np.random.seed(42)
     prices = pd.Series(
         100 + np.cumsum(np.random.randn(500) * 2),
         index=dates
     )
     
-    print("Running test with seed=42...")
-    signals_df_1 = lstm_strategy(prices, window_size=30, epochs=20, verbose=1, seed=42)
-    
-    print("\nRunning test again with same seed=42...")
-    signals_df_2 = lstm_strategy(prices, window_size=30, epochs=20, verbose=1, seed=42)
-    
-    # Check reproducibility
-    print("\n" + "="*70)
-    print("REPRODUCIBILITY CHECK")
-    print("="*70)
-    predictions_match = np.allclose(
-        signals_df_1['prediction'].dropna(), 
-        signals_df_2['prediction'].dropna(),
-        rtol=1e-5
-    )
-    trades_match = (signals_df_1['trade'] == signals_df_2['trade']).all()
-    
-    print(f"Predictions match: {predictions_match}")
-    print(f"Trades match: {trades_match}")
-    
-    if predictions_match and trades_match:
-        print("✓ STABLE: Results are reproducible with same seed!")
-    else:
-        print("✗ WARNING: Results differ (check CUDNN settings)")
+    signals_df = lstm_strategy(prices, window_size=30, epochs=20, verbose=1)
     
     print("\nSample output:")
-    print(signals_df_1.tail(10))
+    print(signals_df.tail(10))
     
-    print("\nPyTorch LSTM strategy (STABLE) ready!")
+    print("\nPyTorch LSTM strategy ready!")
