@@ -10,6 +10,7 @@ Output:
   data/AAPL_prices.csv
   data/MSFT_prices.csv
   data/GOOGL_prices.csv
+  data/NVDA_prices.csv
 """
 import os
 import yfinance as yf
@@ -59,7 +60,7 @@ def fetch_multiple_stocks(tickers: list, start: str, end: str, interval: str = "
 
 if __name__ == "__main__":
     # Download 3 tech stocks for portfolio
-    tickers = ["AAPL", "MSFT", "GOOGL"]
+    tickers = ["AAPL", "MSFT", "GOOGL", "NVDA"]
     
     print("=" * 60)
     print("Downloading stock data for portfolio...")

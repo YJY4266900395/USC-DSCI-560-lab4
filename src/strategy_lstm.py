@@ -1,7 +1,7 @@
 """
 File: strategy_lstm.py
 Purpose:
-  LSTM-based trading strategy for stock price prediction.
+  LSTM-based trading strategy for stock price prediction using PyTorch.
   Generates buy/sell signals with confidence scores.
 
 Key Features:
@@ -16,11 +16,45 @@ Output:
 
 import numpy as np
 import pandas as pd
-from tensorflow import keras
-from tensorflow.keras import layers
+import torch
+import torch.nn as nn
 from sklearn.preprocessing import MinMaxScaler
 import warnings
 warnings.filterwarnings('ignore')
+
+
+class LSTMModel(nn.Module):
+    """
+    PyTorch LSTM model for stock price prediction
+    
+    Architecture:
+      - LSTM Layer 1 (50 units) + Dropout(0.2)
+      - LSTM Layer 2 (50 units) + Dropout(0.2)
+      - Fully Connected Layer (1 output)
+    """
+    def __init__(self, input_size=1, hidden_size=50, num_layers=2, dropout=0.2):
+        super(LSTMModel, self).__init__()
+        
+        self.hidden_size = hidden_size
+        self.num_layers = num_layers
+        
+        self.lstm = nn.LSTM(
+            input_size=input_size,
+            hidden_size=hidden_size,
+            num_layers=num_layers,
+            dropout=dropout,
+            batch_first=True
+        )
+        
+        self.fc = nn.Linear(hidden_size, 1)
+        
+    def forward(self, x):
+        # x shape: (batch_size, seq_length, input_size)
+        lstm_out, _ = self.lstm(x)
+        # Take the last output
+        last_output = lstm_out[:, -1, :]
+        prediction = self.fc(last_output)
+        return prediction
 
 
 def create_sequences(data, window_size=30):
@@ -33,7 +67,7 @@ def create_sequences(data, window_size=30):
     
     Returns:
         X: (n_samples, window_size, 1)
-        y: (n_samples,)
+        y: (n_samples, 1)
     """
     X, y = [], []
     for i in range(len(data) - window_size):
@@ -42,36 +76,20 @@ def create_sequences(data, window_size=30):
     return np.array(X), np.array(y)
 
 
-def build_lstm_model(window_size=30):
+def train_lstm(price_series: pd.Series, window_size=30, epochs=50, batch_size=32, verbose=0):
     """
-    Build a simple 2-layer LSTM model
-    
-    Architecture:
-      - LSTM(50 units) + Dropout(0.2)
-      - LSTM(50 units) + Dropout(0.2)
-      - Dense(1) - output layer
-    """
-    model = keras.Sequential([
-        layers.LSTM(50, return_sequences=True, input_shape=(window_size, 1)),
-        layers.Dropout(0.2),
-        layers.LSTM(50, return_sequences=False),
-        layers.Dropout(0.2),
-        layers.Dense(1)
-    ])
-    
-    model.compile(optimizer='adam', loss='mse', metrics=['mae'])
-    return model
-
-
-def train_lstm(price_series: pd.Series, window_size=30, epochs=50, verbose=0):
-    """
-    Train LSTM model on price data
+    Train LSTM model on price data using PyTorch
     
     Returns:
-        model: trained Keras model
+        model: trained PyTorch model
         scaler: MinMaxScaler for inverse transform
         train_size: number of training samples
     """
+    # Set device
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    if verbose > 0:
+        print(f"Using device: {device}")
+    
     # Normalize data
     scaler = MinMaxScaler(feature_range=(0, 1))
     scaled_data = scaler.fit_transform(price_series.values.reshape(-1, 1))
@@ -84,36 +102,54 @@ def train_lstm(price_series: pd.Series, window_size=30, epochs=50, verbose=0):
     
     # Train/test split (80/20)
     train_size = int(len(X) * 0.8)
-    X_train, X_test = X[:train_size], X[train_size:]
-    y_train, y_test = y[:train_size], y[train_size:]
+    X_train = torch.FloatTensor(X[:train_size]).to(device)
+    y_train = torch.FloatTensor(y[:train_size]).to(device)
+    X_test = torch.FloatTensor(X[train_size:]).to(device)
+    y_test = torch.FloatTensor(y[train_size:]).to(device)
     
-    # Build and train model
-    model = build_lstm_model(window_size)
+    # Build model
+    model = LSTMModel(input_size=1, hidden_size=50, num_layers=2, dropout=0.2).to(device)
+    criterion = nn.MSELoss()
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
     
     print(f"Training LSTM model... (epochs={epochs})")
-    model.fit(
-        X_train, y_train,
-        epochs=epochs,
-        batch_size=32,
-        validation_data=(X_test, y_test),
-        verbose=verbose
-    )
+    
+    # Training loop
+    model.train()
+    for epoch in range(epochs):
+        # Forward pass
+        outputs = model(X_train)
+        loss = criterion(outputs, y_train)
+        
+        # Backward pass
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+        
+        if verbose > 0 and (epoch + 1) % 10 == 0:
+            print(f"Epoch [{epoch+1}/{epochs}], Loss: {loss.item():.4f}")
     
     # Evaluate
-    train_loss, train_mae = model.evaluate(X_train, y_train, verbose=0)
-    test_loss, test_mae = model.evaluate(X_test, y_test, verbose=0)
-    print(f"Training MAE: {train_mae:.4f} | Test MAE: {test_mae:.4f}")
+    model.eval()
+    with torch.no_grad():
+        train_pred = model(X_train)
+        test_pred = model(X_test)
+        train_loss = criterion(train_pred, y_train).item()
+        test_loss = criterion(test_pred, y_test).item()
     
-    return model, scaler, train_size
+    print(f"Training MSE: {train_loss:.4f} | Test MSE: {test_loss:.4f}")
+    
+    return model, scaler, train_size, device
 
 
-def predict_with_lstm(model, scaler, price_series: pd.Series, window_size=30):
+def predict_with_lstm(model, scaler, price_series: pd.Series, window_size=30, device='cpu'):
     """
     Generate predictions for entire series
     
     Returns:
         predictions: array of predicted prices (same length as input)
     """
+    model.eval()
     scaled_data = scaler.transform(price_series.values.reshape(-1, 1)).flatten()
     
     predictions = []
@@ -122,11 +158,13 @@ def predict_with_lstm(model, scaler, price_series: pd.Series, window_size=30):
     predictions.extend([np.nan] * window_size)
     
     # Predict for each time step
-    for i in range(window_size, len(scaled_data)):
-        window = scaled_data[i-window_size:i].reshape(1, window_size, 1)
-        pred_scaled = model.predict(window, verbose=0)[0][0]
-        pred_price = scaler.inverse_transform([[pred_scaled]])[0][0]
-        predictions.append(pred_price)
+    with torch.no_grad():
+        for i in range(window_size, len(scaled_data)):
+            window = scaled_data[i-window_size:i].reshape(1, window_size, 1)
+            window_tensor = torch.FloatTensor(window).to(device)
+            pred_scaled = model(window_tensor).cpu().numpy()[0][0]
+            pred_price = scaler.inverse_transform([[pred_scaled]])[0][0]
+            predictions.append(pred_price)
     
     return np.array(predictions)
 
@@ -145,16 +183,14 @@ def calculate_confidence(predicted_prices, actual_prices, method='return_based')
     """
     if method == 'return_based':
         # Confidence based on predicted return magnitude
-        # Higher predicted return = higher confidence
         predicted_returns = (predicted_prices - actual_prices) / actual_prices
         
         # Normalize to 0-1 range
-        # Use historical max return as reference
         valid_returns = predicted_returns[~np.isnan(predicted_returns)]
         if len(valid_returns) > 0:
-            max_return = np.percentile(np.abs(valid_returns), 95)  # 95th percentile
+            max_return = np.percentile(np.abs(valid_returns), 95)
             confidence = np.abs(predicted_returns) / max_return
-            confidence = np.clip(confidence, 0, 1)  # cap at 1.0
+            confidence = np.clip(confidence, 0, 1)
         else:
             confidence = np.zeros_like(predicted_returns)
         
@@ -168,7 +204,7 @@ def generate_signals_with_confidence(
     price: pd.Series,
     predictions: np.ndarray,
     confidence: np.ndarray,
-    threshold=0.02  # 2% predicted return to trigger signal
+    threshold=0.02
 ):
     """
     Generate buy/sell signals with confidence scores
@@ -179,22 +215,19 @@ def generate_signals_with_confidence(
         HOLD: otherwise
     
     Returns:
-        signal: 1 (long), 0 (flat), -1 (should sell but we're long-only)
+        signal: 1 (long), 0 (flat), -1 (should sell)
         trade: +1 (buy), -1 (sell), 0 (hold)
         confidence: 0-1 score
     """
     predicted_return = (predictions - price.values) / price.values
     
     signal = np.zeros(len(price))
-    signal[predicted_return > threshold] = 1  # Buy signal
-    signal[predicted_return < -threshold] = -1  # Sell signal (mean revert or stop loss)
+    signal[predicted_return > threshold] = 1
+    signal[predicted_return < -threshold] = -1
     
-    # Generate trades (changes in signal)
+    # Generate trades
     trade = np.zeros(len(price))
     trade[1:] = np.diff(signal)
-    
-    # For long-only: convert -1 signal to sell action if we're holding
-    # This will be handled by backtest
     
     return signal, trade, confidence
 
@@ -207,29 +240,29 @@ def lstm_strategy(
     verbose=0
 ) -> pd.DataFrame:
     """
-    Complete LSTM trading strategy pipeline
+    Complete LSTM trading strategy pipeline (PyTorch version)
     
     Args:
         price: price series with datetime index
         window_size: LSTM look-back window
         epochs: training epochs
         threshold: return threshold for signal generation
-        verbose: training verbosity (0=silent, 1=progress bar, 2=one line per epoch)
+        verbose: training verbosity
     
     Returns:
         DataFrame with columns: price, prediction, signal, trade, confidence
     """
     print(f"\n{'='*60}")
-    print(f"Running LSTM Strategy")
+    print(f"Running LSTM Strategy (PyTorch)")
     print(f"Data points: {len(price)}")
     print(f"Window size: {window_size} | Epochs: {epochs} | Threshold: {threshold:.1%}")
     print(f"{'='*60}")
     
     # Train model
-    model, scaler, train_size = train_lstm(price, window_size, epochs, verbose)
+    model, scaler, train_size, device = train_lstm(price, window_size, epochs, verbose=verbose)
     
     # Generate predictions
-    predictions = predict_with_lstm(model, scaler, price, window_size)
+    predictions = predict_with_lstm(model, scaler, price, window_size, device)
     
     # Calculate confidence
     confidence = calculate_confidence(predictions, price.values, method='return_based')
@@ -270,3 +303,5 @@ if __name__ == "__main__":
     
     print("\nSample output:")
     print(signals_df.tail(10))
+    
+    print("\nLSTM strategy ready!")

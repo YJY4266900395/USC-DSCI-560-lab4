@@ -200,7 +200,7 @@ if __name__ == "__main__":
     
     # Mock signals for 3 stocks
     signals_dict = {}
-    for ticker in ['AAPL', 'MSFT', 'GOOGL']:
+    for ticker in ['AAPL', 'MSFT', 'GOOGL', 'NVDA']:
         signals_dict[ticker] = pd.DataFrame({
             'price': 100 + np.cumsum(np.random.randn(100)),
             'trade': np.random.choice([0, 1, -1], size=100, p=[0.90, 0.05, 0.05]),

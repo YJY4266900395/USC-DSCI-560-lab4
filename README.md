@@ -13,7 +13,7 @@ This project implements an **LSTM-based algorithmic trading system** for multi-s
 
 1. **LSTM Price Prediction**: 2-layer LSTM network with dropout for time series forecasting
 2. **Confidence-Based Allocation**: "Base + Bonus" strategy (20% base + up to 10% bonus based on confidence)
-3. **Multi-Stock Portfolio**: Shared cash pool across 3+ stocks (AAPL, MSFT, GOOGL)
+3. **Multi-Stock Portfolio**: Shared cash pool across 3+ stocks (AAPL, MSFT, GOOGL, NVDA)
 4. **Comprehensive Metrics**: Total return, Sharpe ratio, max drawdown, annualized volatility
 5. **Professional Visualizations**: Portfolio value, cash vs holdings, individual stock performance
 
@@ -24,24 +24,24 @@ This project implements an **LSTM-based algorithmic trading system** for multi-s
 ### Requirements
 
 - Python 3.8+
-- TensorFlow 2.x
+- PyTorch
 - Required packages:
 
 ```bash
-pip install tensorflow pandas numpy yfinance scikit-learn matplotlib
+pip install torch pandas numpy yfinance scikit-learn matplotlib
 ```
 
 ### Quick Setup
 
 ```bash
 # Clone or extract the project
-cd lab4_project
+cd USC-DSCI-560-LAB4
 
 # Install dependencies
-pip install -r requirements.txt
+pip install -r src/requirements.txt
 
 # Run the system
-python main.py
+python src/main.py
 ```
 
 ---
@@ -50,12 +50,13 @@ python main.py
 
 ```
 lab4_project/
-├── main.py                    # Main entry point
-├── fetch_data.py              # Stock data downloader
-├── strategy_lstm.py           # LSTM trading strategy
-├── backtest_portfolio.py      # Multi-stock backtesting engine
-├── metrics.py                 # Performance metrics calculator
-├── plot.py                    # Visualization module
+├── src/                    # Stock price data (CSV files)
+│   ├── main.py                    # Main entry point
+│   ├── fetch_data.py              # Stock data downloader
+│   ├── strategy_lstm.py           # LSTM trading strategy
+|   ├── backtest_portfolio.py      # Multi-stock backtesting engine
+|   ├── metrics.py                 # Performance metrics calculator
+|   ├── plot.py                    # Visualization module
 ├── data/                      # Stock price data (CSV files)
 │   ├── AAPL_prices.csv
 │   ├── MSFT_prices.csv
@@ -73,7 +74,7 @@ lab4_project/
 
 ### Basic Usage
 
-Run with default settings (AAPL, MSFT, GOOGL from 2022-2024):
+Run with default settings (AAPL, MSFT, GOOGL, NVDA from 2022-2024):
 
 ```bash
 python main.py
@@ -97,7 +98,7 @@ python main.py \
 
 | Parameter | Description | Default |
 |-----------|-------------|---------|
-| `--tickers` | Stock symbols to trade | AAPL MSFT GOOGL |
+| `--tickers` | Stock symbols to trade | AAPL MSFT GOOGL NVDA |
 | `--cash` | Initial investment ($) | 10000 |
 | `--window` | LSTM look-back days | 30 |
 | `--epochs` | Training epochs | 50 |
@@ -191,11 +192,6 @@ After running, check the `outputs/` directory for:
 ---
 
 ## Troubleshooting
-
-### "No module named 'tensorflow'"
-```bash
-pip install tensorflow
-```
 
 ### "No data available for ticker"
 - Check ticker symbol is correct

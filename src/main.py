@@ -83,8 +83,8 @@ def main():
     parser.add_argument(
         "--tickers",
         nargs="+",
-        default=["AAPL", "MSFT", "GOOGL"],
-        help="Stock tickers to trade (default: AAPL MSFT GOOGL)"
+        default=["AAPL", "MSFT", "GOOGL", "NVDA"],
+        help="Stock tickers to trade (default: AAPL MSFT GOOGL NVDA)"
     )
     parser.add_argument(
         "--data_dir",
