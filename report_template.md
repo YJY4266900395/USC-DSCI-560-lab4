@@ -20,7 +20,13 @@ We researched the following trading algorithms:
 - Investopedia - Moving Average Strategies: https://www.investopedia.com/articles/active-trading/052014/how-use-moving-average-buy-stocks.asp
 - Investopedia - RSI: https://www.investopedia.com/terms/r/rsi.asp
 
-### 1.b) Algorithm Selection: LSTM
+### 1.b) Algorithm Selection
+
+#### Step 1: baseline - MA
+
+(TODO: contents here)
+
+#### Step 2: final model - LSTM
 
 **Why LSTM?**
 

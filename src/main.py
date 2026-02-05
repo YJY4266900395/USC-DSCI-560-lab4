@@ -18,6 +18,7 @@ import os
 import argparse
 import pandas as pd
 from datetime import datetime
+import time
 
 from fetch_data import fetch_multiple_stocks
 from strategy_lstm import lstm_strategy
@@ -193,13 +194,13 @@ def main():
     parser.add_argument(
         "--base_alloc",
         type=float,
-        default=0.20,
+        default=0.30,
         help="Base allocation per trade (default: 0.20 = 20%%)"
     )
     parser.add_argument(
         "--conf_bonus",
         type=float,
-        default=0.10,
+        default=0.30,
         help="Max confidence bonus (default: 0.10 = 10%%)"
     )
     
@@ -329,4 +330,6 @@ def main():
 
 
 if __name__ == "__main__":
+    start = time.time()
     main()
+    print(f"Total Execution Time: {time.time() - start:.2f} seconds")
