@@ -33,6 +33,14 @@ def fetch_and_save(ticker: str, start: str, end: str, interval: str = "1d", out_
         raise ValueError(f"No data returned for {ticker}. Check ticker symbol or date range.")
 
     df = df.reset_index()  # Date becomes a column
+    # Clean column names - yfinance sometimes adds ticker names in multi-index
+    if isinstance(df.columns, pd.MultiIndex):
+        # Flatten multi-index columns
+        df.columns = ['_'.join(col).strip() if col[1] else col[0] for col in df.columns.values]
+    
+    # Ensure we have standard column names
+    df.columns = [col.replace(f'{ticker}_', '') if ticker in col else col for col in df.columns]
+    
     out_path = os.path.join(out_dir, f"{ticker}_prices.csv")
     df.to_csv(out_path, index=False)
 

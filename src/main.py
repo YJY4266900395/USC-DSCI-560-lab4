@@ -47,10 +47,48 @@ def load_or_fetch_data(tickers, data_dir="data", start="2022-01-01", end="2024-1
         if os.path.exists(csv_path):
             try:
                 df = pd.read_csv(csv_path)
-                df['Date'] = pd.to_datetime(df['Date'])
-                df = df.set_index('Date').sort_index()
-                price_data[ticker] = df['Close'].astype(float)
-                print(f"[LOADED] {ticker} from {csv_path}")
+                
+                # Handle potential multi-index or ticker-prefixed columns
+                if isinstance(df.columns, pd.MultiIndex):
+                    df.columns = ['_'.join(col).strip() if col[1] else col[0] for col in df.columns.values]
+                
+                # Clean column names
+                df.columns = [col.replace(f'{ticker}_', '') if ticker in str(col) else col for col in df.columns]
+                
+                # Find date column (case insensitive)
+                date_col = None
+                for col in df.columns:
+                    if 'date' in col.lower():
+                        date_col = col
+                        break
+                
+                if date_col is None:
+                    raise ValueError(f"No date column found in {csv_path}")
+                
+                # Find Close price column
+                close_col = None
+                for col in df.columns:
+                    if 'close' in col.lower() and 'adj' not in col.lower():
+                        close_col = col
+                        break
+                
+                if close_col is None:
+                    # Try Adj Close as fallback
+                    for col in df.columns:
+                        if 'close' in col.lower():
+                            close_col = col
+                            break
+                
+                if close_col is None:
+                    raise ValueError(f"No Close column found in {csv_path}")
+                
+                df[date_col] = pd.to_datetime(df[date_col], errors='coerce')
+                df = df.dropna(subset=[date_col])
+                df = df.set_index(date_col).sort_index()
+                
+                price_data[ticker] = df[close_col].astype(float)
+                print(f"[LOADED] {ticker} from {csv_path} ({len(price_data[ticker])} rows)")
+                
             except Exception as e:
                 print(f"[ERROR] Failed to load {ticker}: {e}")
                 missing_tickers.append(ticker)
@@ -62,16 +100,39 @@ def load_or_fetch_data(tickers, data_dir="data", start="2022-01-01", end="2024-1
         print(f"\n[FETCHING] Missing tickers: {', '.join(missing_tickers)}")
         fetch_multiple_stocks(missing_tickers, start, end, out_dir=data_dir)
         
-        # Load newly fetched data
+        # Load newly fetched data (using same logic as above)
         for ticker in missing_tickers:
             csv_path = os.path.join(data_dir, f"{ticker}_prices.csv")
             if os.path.exists(csv_path):
-                df = pd.read_csv(csv_path)
-                df['Date'] = pd.to_datetime(df['Date'])
-                df = df.set_index('Date').sort_index()
-                price_data[ticker] = df['Close'].astype(float)
+                try:
+                    df = pd.read_csv(csv_path)
+                    
+                    if isinstance(df.columns, pd.MultiIndex):
+                        df.columns = ['_'.join(col).strip() if col[1] else col[0] for col in df.columns.values]
+                    
+                    df.columns = [col.replace(f'{ticker}_', '') if ticker in str(col) else col for col in df.columns]
+                    
+                    date_col = next((col for col in df.columns if 'date' in col.lower()), None)
+                    close_col = next((col for col in df.columns if 'close' in col.lower() and 'adj' not in col.lower()), None)
+                    if close_col is None:
+                        close_col = next((col for col in df.columns if 'close' in col.lower()), None)
+                    
+                    if date_col is None:
+                        raise ValueError(f"No date column found. Available columns: {list(df.columns)}")
+                    if close_col is None:
+                        raise ValueError(f"No Close column found. Available columns: {list(df.columns)}")
+                    
+                    df[date_col] = pd.to_datetime(df[date_col], errors='coerce')
+                    df = df.dropna(subset=[date_col])
+                    df = df.set_index(date_col).sort_index()
+                    
+                    price_data[ticker] = df[close_col].astype(float)
+                    print(f"[LOADED] {ticker} (newly fetched, {len(price_data[ticker])} rows)")
+                except Exception as e:
+                    print(f"[ERROR] Failed to load newly fetched {ticker}: {e}")
     
     return price_data
+
 
 
 def main():
