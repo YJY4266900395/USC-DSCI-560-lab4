@@ -1,131 +1,270 @@
 """
-DSCI-560 Lab 4 - Main Entry
-You can run directly: python src/main.py
+DSCI-560 Lab 4 - Multi-Stock LSTM Trading System
+Main entry point for the complete pipeline.
+
+Usage:
+    python main.py [options]
+
+Pipeline:
+    1. Load stock price data (or fetch if not available)
+    2. Train LSTM models for each stock
+    3. Generate trading signals with confidence scores
+    4. Backtest portfolio with shared cash pool
+    5. Calculate performance metrics
+    6. Generate visualizations
 """
 
 import os
 import argparse
 import pandas as pd
+from datetime import datetime
 
-from strategy_ma import moving_average_signals
-from backtest import backtest_long_only
-from metrics import compute_metrics
-from plot import plot_portfolio_value, plot_price_and_signals
+from fetch_data import fetch_multiple_stocks
+from strategy_lstm import lstm_strategy
+from backtest_portfolio import backtest_portfolio
+from metrics import compute_metrics, print_metrics
+from plot import (
+    plot_portfolio_value,
+    plot_cash_vs_holdings,
+    plot_stock_holdings,
+    plot_all_stocks_signals
+)
 
 
-def load_price_series_csv(
-    path: str,
-    date_col: str = "Date",
-    price_col: str = "Close"
-) -> pd.Series:
+def load_or_fetch_data(tickers, data_dir="data", start="2022-01-01", end="2024-12-31"):
     """
-    Robust CSV loader (guaranteed to remove junk rows like:
-    Date = NaN and price columns = 'AAPL').
+    Load stock data from CSV or fetch from Yahoo Finance if not available
+    
+    Returns:
+        dict: {ticker: price_series}
     """
-    if not os.path.exists(path):
-        raise FileNotFoundError(f"CSV file not found: {path}")
-
-    df = pd.read_csv(path)
-
-    # ---- date column detection ----
-    if date_col not in df.columns:
-        for candidate in ["date", "Datetime", "datetime", "timestamp", "Time", "time"]:
-            if candidate in df.columns:
-                date_col = candidate
-                break
-        if date_col not in df.columns:
-            raise ValueError(f"Date column not found. Columns: {list(df.columns)}")
-
-    # convert date FIRST, then drop invalid rows FIRST (this removes the 'AAPL' junk row)
-    df[date_col] = pd.to_datetime(df[date_col], errors="coerce")
-    df = df.dropna(subset=[date_col])
-
-    # remove duplicate dates if any
-    df = df.drop_duplicates(subset=[date_col])
-
-    # sort & index
-    df = df.sort_values(date_col).set_index(date_col)
-
-    # price column detection
-    if price_col not in df.columns:
-        for candidate in ["Close", "close", "Adj Close", "AdjClose", "adj_close", "price"]:
-            if candidate in df.columns:
-                price_col = candidate
-                break
-        if price_col not in df.columns:
-            raise ValueError(f"Price column not found. Columns: {list(df.columns)}")
-
-    # debug AFTER cleaning (so first row will be valid)
-    print("[DEBUG] CSV columns:", list(df.columns))
-    print("[DEBUG] first row:", df.iloc[0].to_dict())
-
-    # ---- numeric conversion ----
-    price = pd.to_numeric(df[price_col], errors="coerce").dropna()
-
-    if len(price) < 5:
-        raise ValueError(
-            f"Not enough valid numeric prices after cleaning. "
-            f"price_col={price_col}, rows={len(price)}"
-        )
-
-    return price.astype(float)
-
+    price_data = {}
+    missing_tickers = []
+    
+    # Try to load existing data
+    for ticker in tickers:
+        csv_path = os.path.join(data_dir, f"{ticker}_prices.csv")
+        if os.path.exists(csv_path):
+            try:
+                df = pd.read_csv(csv_path)
+                df['Date'] = pd.to_datetime(df['Date'])
+                df = df.set_index('Date').sort_index()
+                price_data[ticker] = df['Close'].astype(float)
+                print(f"[LOADED] {ticker} from {csv_path}")
+            except Exception as e:
+                print(f"[ERROR] Failed to load {ticker}: {e}")
+                missing_tickers.append(ticker)
+        else:
+            missing_tickers.append(ticker)
+    
+    # Fetch missing data
+    if missing_tickers:
+        print(f"\n[FETCHING] Missing tickers: {', '.join(missing_tickers)}")
+        fetch_multiple_stocks(missing_tickers, start, end, out_dir=data_dir)
+        
+        # Load newly fetched data
+        for ticker in missing_tickers:
+            csv_path = os.path.join(data_dir, f"{ticker}_prices.csv")
+            if os.path.exists(csv_path):
+                df = pd.read_csv(csv_path)
+                df['Date'] = pd.to_datetime(df['Date'])
+                df = df.set_index('Date').sort_index()
+                price_data[ticker] = df['Close'].astype(float)
+    
+    return price_data
 
 
 def main():
-    parser = argparse.ArgumentParser(description="DSCI-560 Lab 4 Trading System")
+    parser = argparse.ArgumentParser(
+        description="DSCI-560 Lab 4: Multi-Stock LSTM Trading System"
+    )
+    
+    # Data parameters
     parser.add_argument(
-        "--csv",
-        default="data/AAPL_prices.csv",
-        help="Path to stock price CSV (default: data/AAPL_prices.csv)"
+        "--tickers",
+        nargs="+",
+        default=["AAPL", "MSFT", "GOOGL"],
+        help="Stock tickers to trade (default: AAPL MSFT GOOGL)"
     )
-
-    parser.add_argument("--date_col", default="Date")
-    parser.add_argument("--price_col", default="Close")
-    parser.add_argument("--short", type=int, default=5)
-    parser.add_argument("--long", type=int, default=20)
-    parser.add_argument("--cash", type=float, default=10000.0)
-    parser.add_argument("--rf", type=float, default=0.0)
-
+    parser.add_argument(
+        "--data_dir",
+        default="data",
+        help="Directory containing stock data CSVs"
+    )
+    parser.add_argument(
+        "--start",
+        default="2022-01-01",
+        help="Start date for data (YYYY-MM-DD)"
+    )
+    parser.add_argument(
+        "--end",
+        default="2024-12-31",
+        help="End date for data (YYYY-MM-DD)"
+    )
+    
+    # LSTM parameters
+    parser.add_argument(
+        "--window",
+        type=int,
+        default=30,
+        help="LSTM look-back window (default: 30)"
+    )
+    parser.add_argument(
+        "--epochs",
+        type=int,
+        default=50,
+        help="LSTM training epochs (default: 50)"
+    )
+    parser.add_argument(
+        "--threshold",
+        type=float,
+        default=0.02,
+        help="Signal threshold for predicted return (default: 0.02 = 2%%)"
+    )
+    
+    # Portfolio parameters
+    parser.add_argument(
+        "--cash",
+        type=float,
+        default=10000.0,
+        help="Initial cash (default: 10000)"
+    )
+    parser.add_argument(
+        "--base_alloc",
+        type=float,
+        default=0.20,
+        help="Base allocation per trade (default: 0.20 = 20%%)"
+    )
+    parser.add_argument(
+        "--conf_bonus",
+        type=float,
+        default=0.10,
+        help="Max confidence bonus (default: 0.10 = 10%%)"
+    )
+    
+    # Output parameters
+    parser.add_argument(
+        "--output_dir",
+        default="outputs",
+        help="Output directory for results"
+    )
+    parser.add_argument(
+        "--verbose",
+        type=int,
+        default=0,
+        help="LSTM training verbosity (0=silent, 1=progress, 2=detailed)"
+    )
+    
     args = parser.parse_args()
-
-    os.makedirs("outputs", exist_ok=True)
-
-    # 1. Load data
-    price = load_price_series_csv(
-        args.csv,
-        date_col=args.date_col,
-        price_col=args.price_col
+    
+    # Create output directory
+    os.makedirs(args.output_dir, exist_ok=True)
+    
+    print("\n" + "="*70)
+    print(" " * 15 + "DSCI-560 LAB 4: LSTM TRADING SYSTEM")
+    print("="*70)
+    print(f"Tickers:     {', '.join(args.tickers)}")
+    print(f"Date Range:  {args.start} to {args.end}")
+    print(f"Initial Cash: ${args.cash:,.2f}")
+    print(f"LSTM Window: {args.window} days | Epochs: {args.epochs}")
+    print(f"Allocation:  {args.base_alloc:.0%} base + up to {args.conf_bonus:.0%} bonus")
+    print("="*70 + "\n")
+    
+    # Step 1: Load or fetch data
+    print("STEP 1: Loading stock data...")
+    price_data = load_or_fetch_data(
+        tickers=args.tickers,
+        data_dir=args.data_dir,
+        start=args.start,
+        end=args.end
     )
-
-    # 2. Strategy
-    signals = moving_average_signals(price, short=args.short, long=args.long)
-
-    # 3. Backtest
-    portfolio_df, trades_df = backtest_long_only(
-        signals, initial_cash=args.cash
+    
+    if len(price_data) == 0:
+        print("[ERROR] No stock data available. Exiting.")
+        return
+    
+    print(f"[OK] Loaded {len(price_data)} stocks\n")
+    
+    # Step 2: Generate LSTM signals for each stock
+    print("STEP 2: Generating LSTM trading signals...")
+    signals_dict = {}
+    
+    for ticker, price_series in price_data.items():
+        print(f"\nProcessing {ticker}...")
+        signals_df = lstm_strategy(
+            price=price_series,
+            window_size=args.window,
+            epochs=args.epochs,
+            threshold=args.threshold,
+            verbose=args.verbose
+        )
+        signals_dict[ticker] = signals_df
+    
+    print("\n[OK] All signals generated\n")
+    
+    # Step 3: Backtest portfolio
+    print("STEP 3: Running portfolio backtest...")
+    portfolio_df, trades_df = backtest_portfolio(
+        signals_dict=signals_dict,
+        initial_cash=args.cash,
+        base_allocation=args.base_alloc,
+        confidence_bonus=args.conf_bonus
     )
-
-    # 4. Metrics
-    metrics = compute_metrics(portfolio_df, trading_days=252, rf_annual=args.rf)
-
-    # 5. Save outputs
-    portfolio_df.to_csv("outputs/portfolio_value.csv")
-    trades_df.to_csv("outputs/trades.csv", index=False)
-
-    plot_portfolio_value(portfolio_df, "outputs/portfolio_value.png")
-    plot_price_and_signals(signals, "outputs/price_ma_signals.png")
-
-    # 6. Print results
-    print("\n===== Lab 4 Results =====")
-    print(f"CSV used: {args.csv}")
-    print(f"MA windows: short={args.short}, long={args.long}")
-    print(f"Initial cash: {args.cash}")
-    print("-------------------------")
-    for k, v in metrics.items():
-        print(f"{k}: {v}")
-    print("-------------------------")
-    print("Outputs saved in ./outputs/")
+    
+    # Step 4: Calculate metrics
+    print("STEP 4: Calculating performance metrics...")
+    metrics = compute_metrics(portfolio_df, trading_days=252, rf_annual=0.0)
+    print_metrics(metrics, title="Portfolio Performance Metrics")
+    
+    # Step 5: Generate plots
+    print("STEP 5: Generating visualizations...")
+    plot_portfolio_value(portfolio_df, f"{args.output_dir}/portfolio_value.png")
+    plot_cash_vs_holdings(portfolio_df, f"{args.output_dir}/cash_vs_holdings.png")
+    plot_stock_holdings(portfolio_df, args.tickers, f"{args.output_dir}/stock_holdings.png")
+    plot_all_stocks_signals(signals_dict, args.output_dir)
+    
+    # Step 6: Save results
+    print("\nSTEP 6: Saving results...")
+    portfolio_df.to_csv(f"{args.output_dir}/portfolio_value.csv")
+    print(f"[SAVED] {args.output_dir}/portfolio_value.csv")
+    
+    if len(trades_df) > 0:
+        trades_df.to_csv(f"{args.output_dir}/trades.csv", index=False)
+        print(f"[SAVED] {args.output_dir}/trades.csv")
+    
+    # Save metrics to text file
+    with open(f"{args.output_dir}/metrics_summary.txt", 'w') as f:
+        f.write("="*70 + "\n")
+        f.write("DSCI-560 LAB 4: PORTFOLIO PERFORMANCE METRICS\n")
+        f.write("="*70 + "\n\n")
+        f.write(f"Strategy: LSTM with Confidence-Based Allocation\n")
+        f.write(f"Tickers: {', '.join(args.tickers)}\n")
+        f.write(f"Date Range: {args.start} to {args.end}\n")
+        f.write(f"Initial Cash: ${args.cash:,.2f}\n\n")
+        f.write("-"*70 + "\n")
+        f.write("RESULTS\n")
+        f.write("-"*70 + "\n")
+        for key, value in metrics.items():
+            if isinstance(value, float):
+                if 'return' in key.lower() or 'volatility' in key.lower() or 'drawdown' in key.lower():
+                    f.write(f"{key.replace('_', ' ').title():<25} {value:>15.2%}\n")
+                else:
+                    f.write(f"{key.replace('_', ' ').title():<25} {value:>15.2f}\n")
+            else:
+                f.write(f"{key.replace('_', ' ').title():<25} {value:>15}\n")
+        f.write("="*70 + "\n")
+    
+    print(f"[SAVED] {args.output_dir}/metrics_summary.txt")
+    
+    # Final summary
+    print("\n" + "="*70)
+    print(" " * 25 + "EXECUTION COMPLETE")
+    print("="*70)
+    print(f"Total Return:     {metrics['total_return']:>10.2%}")
+    print(f"Sharpe Ratio:     {metrics['sharpe_ratio']:>10.2f}")
+    print(f"Max Drawdown:     {metrics['max_drawdown']:>10.2%}")
+    print(f"\nAll outputs saved to: {args.output_dir}/")
+    print("="*70 + "\n")
 
 
 if __name__ == "__main__":

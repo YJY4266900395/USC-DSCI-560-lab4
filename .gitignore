@@ -1,0 +1,57 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv/
+ENV/
+env/
+.env/
+.venv/
+venv.bak/
+venv/
+
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+
+# IPython / Jupyter
+.ipynb_checkpoints
+profile_default/
+ipython_config.py
+
+# pyenv
+.python-version
+
+# Editor directories and files
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+*.tmproj
+*.project
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Secrets and envs
+.env
+.env.*.local
+*.pem
+*.key
+credentials.txt
+secrets.json
+
+# Node/npm (if present)
+node_modules/
+
+# Optional: JetBrains IDE folders
+.idea/
+
+# Optional: Mac specific
+.AppleDouble
+.LSOverride
