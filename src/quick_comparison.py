@@ -60,7 +60,7 @@ print("TEST 2: STABLE VERSION (Fixed Seed = 42)")
 print("-"*70)
 
 try:
-    from strategy_lstm_stable import lstm_strategy as lstm_stable
+    from strategy_lstm import lstm_strategy as lstm_stable
     
     results_stable = []
     print("\nRunning 3 times with seed=42...")
