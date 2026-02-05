@@ -88,7 +88,7 @@ Customize parameters:
 python main.py \
   --tickers AAPL MSFT GOOGL NVDA TSLA \
   --cash 20000 \
-  --epochs 100 \
+  --epochs 150 \
   --window 60 \
   --base_alloc 0.15 \
   --conf_bonus 0.15
@@ -101,10 +101,10 @@ python main.py \
 | `--tickers` | Stock symbols to trade | AAPL MSFT GOOGL NVDA |
 | `--cash` | Initial investment ($) | 10000 |
 | `--window` | LSTM look-back days | 30 |
-| `--epochs` | Training epochs | 50 |
+| `--epochs` | Training epochs | 100 |
 | `--threshold` | Signal threshold (%) | 0.02 (2%) |
-| `--base_alloc` | Base allocation (%) | 0.20 (20%) |
-| `--conf_bonus` | Max confidence bonus (%) | 0.10 (10%) |
+| `--base_alloc` | Base allocation (%) | 0.30 (20%) |
+| `--conf_bonus` | Max confidence bonus (%) | 0.20 (10%) |
 
 ---
 
@@ -132,11 +132,11 @@ Dense Layer (1 output - next day price)
 **Allocation Strategy (Your Innovation!):**
 ```python
 allocation = base_allocation + (confidence_score * bonus)
-allocation = 20% + (confidence * 10%)
+allocation = 30% + (confidence * 20%)
 
 Example:
-- Low confidence (0.3): 20% + (0.3 * 10%) = 23% of cash
-- High confidence (0.8): 20% + (0.8 * 10%) = 28% of cash
+- Low confidence (0.3): 30% + (0.3 * 20%) = 36% of cash
+- High confidence (0.8): 30% + (0.8 * 20%) = 46% of cash
 ```
 
 This "base + bonus" approach:
@@ -221,6 +221,7 @@ After running, check the `outputs/` directory for:
 
 ## Future Improvements
 
+0. TUNING!
 1. Add transaction costs and slippage
 2. Implement short selling capability
 3. Use hybrid models (LSTM + ARIMA)
