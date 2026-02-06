@@ -16,7 +16,7 @@ Output:
 
 import pandas as pd
 
-def moving_average_signals(price: pd.Series, short: int = 5, long: int = 20) -> pd.DataFrame:
+def moving_average_signals(price: pd.Series, short: int = 12, long: int = 120) -> pd.DataFrame:
     if short >= long:
         raise ValueError("short window must be smaller than long window")
 
