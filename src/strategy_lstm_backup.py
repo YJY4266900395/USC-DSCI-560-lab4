@@ -1,14 +1,6 @@
 """
-File: strategy_lstm.py (PyTorch version)
-Purpose:
-  LSTM-based trading strategy for stock price prediction using PyTorch.
-  Generates buy/sell signals with confidence scores.
-
-Key Features:
-  - Uses sliding window approach for time series
-  - Predicts next-day price
-  - Generates signals with confidence (0-1 scale)
-  - Confidence = predicted_return / max_historical_return
+LSTM-based trading strategy for stock price prediction using PyTorch.
+Generates buy/sell signals with confidence scores.
 
 Output:
   DataFrame with columns: price, prediction, signal, trade, confidence

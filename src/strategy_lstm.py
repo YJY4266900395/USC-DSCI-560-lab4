@@ -1,23 +1,3 @@
-"""
-File: strategy_lstm_stable.py (PyTorch version - STABLE)
-Purpose:
-  LSTM-based trading strategy with STABILITY IMPROVEMENTS:
-  1. Fixed random seed for reproducibility
-  2. Gradient clipping to prevent exploding gradients
-  3. Learning rate scheduler for stable convergence
-  4. Early stopping to prevent overfitting
-  5. Improved weight initialization
-
-Key Features:
-  - Uses sliding window approach for time series
-  - Predicts next-day price
-  - Generates signals with confidence (0-1 scale)
-  - Confidence = predicted_return / max_historical_return
-
-Output:
-  DataFrame with columns: price, prediction, signal, trade, confidence
-"""
-
 import numpy as np
 import pandas as pd
 import torch
@@ -76,12 +56,12 @@ class LSTMModel(nn.Module):
         
         self.fc = nn.Linear(hidden_size, 1)
         
-        # 权重初始化
+        # weights initialization
         self._initialize_weights()
         
     def _initialize_weights(self):
         """
-        使用Xavier初始化提高训练稳定性
+        Xavier/He initialization for LSTM weights for stability
         """
         for name, param in self.lstm.named_parameters():
             if 'weight_ih' in name:
@@ -91,7 +71,7 @@ class LSTMModel(nn.Module):
             elif 'bias' in name:
                 param.data.fill_(0)
         
-        # FC层初始化
+        # FC layer initialization
         nn.init.xavier_uniform_(self.fc.weight)
         nn.init.zeros_(self.fc.bias)
         
@@ -135,7 +115,7 @@ def train_lstm(
     min_delta=1e-6
 ):
     """
-    Train LSTM model on price data using PyTorch (STABLE VERSION)
+    Train LSTM model on price data using PyTorch
     
     Args:
         price_series: pandas Series of prices
@@ -154,7 +134,7 @@ def train_lstm(
         train_size: number of training samples
         device: torch device
     """
-    # 固定随机种子
+    # set seed
     set_seed(seed)
     
     # Set device
@@ -190,13 +170,12 @@ def train_lstm(
     criterion = nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
     
-    # 学习率调度器 (ReduceLROnPlateau for stability)
+    # ReduceLROnPlateau for stability
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, 
         mode='min', 
         factor=0.5, 
-        patience=10, 
-        verbose=(verbose > 0),
+        patience=10,
         min_lr=1e-7
     )
     
@@ -225,7 +204,7 @@ def train_lstm(
         optimizer.zero_grad()
         loss.backward()
         
-        # 梯度裁剪 (防止梯度爆炸)
+        # Gradient clipping
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
         
         optimizer.step()
@@ -473,11 +452,9 @@ if __name__ == "__main__":
     print(f"Trades match: {trades_match}")
     
     if predictions_match and trades_match:
-        print("✓ STABLE: Results are reproducible with same seed!")
+        print("STABLE: Results are reproducible with same seed!")
     else:
-        print("✗ WARNING: Results differ (check CUDNN settings)")
+        print("WARNING: Results differ (check CUDNN settings)")
     
     print("\nSample output:")
     print(signals_df_1.tail(10))
-    
-    print("\nPyTorch LSTM strategy (STABLE) ready!")

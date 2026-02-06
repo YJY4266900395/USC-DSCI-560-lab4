@@ -46,9 +46,9 @@ try:
     print(f"  Std Dev: {np.std(results_original):.2f}")
     
     if np.std(results_original) > 2:
-        print("  ⚠️ HIGH VARIANCE - Results are unstable!")
+        print("HIGH VARIANCE - Results are unstable!")
     else:
-        print("  ✓ Low variance")
+        print("Low variance")
         
 except Exception as e:
     print(f"[ERROR] Could not run original version: {e}")
@@ -77,9 +77,9 @@ try:
     print(f"  Std Dev: {np.std(results_stable):.2f}")
     
     if np.std(results_stable) < 0.1:
-        print("  ✓ PERFECT REPRODUCIBILITY!")
+        print("PERFECT REPRODUCIBILITY!")
     else:
-        print("  ⚠️ Some variance detected")
+        print("Some variance detected")
         
 except Exception as e:
     print(f"[ERROR] Could not run stable version: {e}")
@@ -93,17 +93,10 @@ print("="*70)
 if results_original is not None:
     print(f"\nOriginal Version:")
     print(f"  Std Dev: {np.std(results_original):.2f}")
-    print(f"  Reproducible: {'No ❌' if np.std(results_original) > 0.1 else 'Yes ✓'}")
+    print(f"  Reproducible: {'No' if np.std(results_original) > 0.1 else 'Yes'}")
 
 if results_stable is not None:
     print(f"\nStable Version:")
     print(f"  Std Dev: {np.std(results_stable):.2f}")
-    print(f"  Reproducible: {'Yes ✓' if np.std(results_stable) < 0.1 else 'No ❌'}")
+    print(f"  Reproducible: {'Yes' if np.std(results_stable) < 0.1 else 'No'}")
 
-print("\n" + "="*70)
-print("\n✅ RECOMMENDATION: Use strategy_lstm_stable.py for production")
-print("   - Fixed seed ensures reproducibility")
-print("   - Gradient clipping prevents instability")
-print("   - Early stopping prevents overfitting")
-print("\n📖 See STABILITY_GUIDE.md for detailed instructions")
-print("="*70 + "\n")
