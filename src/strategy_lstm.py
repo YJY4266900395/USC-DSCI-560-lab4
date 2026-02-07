@@ -138,7 +138,7 @@ def train_lstm(
         device: torch device
     """
     # set seed
-    set_seed(seed)
+    # set_seed(seed)
     
     # Set device
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -156,10 +156,11 @@ def train_lstm(
     for i in range(len(scaled_prices) - window_size):
         # X: normalized price window
         X.append(scaled_prices[i:i+window_size])
+        y.append(scaled_prices[i+window_size])
         
         # y: percentage change on ORIGINAL prices (not normalized)
-        pct_change = (original_prices[i+window_size] - original_prices[i+window_size-1]) / original_prices[i+window_size-1]
-        y.append(pct_change)
+        # pct_change = (original_prices[i+window_size] - original_prices[i+window_size-1]) / original_prices[i+window_size-1]
+        # y.append(pct_change)
 
     X = np.array(X)
     y = np.array(y)

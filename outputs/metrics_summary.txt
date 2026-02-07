@@ -1,0 +1,21 @@
+======================================================================
+DSCI-560 LAB 4: PORTFOLIO PERFORMANCE METRICS
+======================================================================
+
+Strategy: LSTM with Confidence-Based Allocation
+Tickers: AAPL, MSFT, GOOGL, NVDA
+Date Range: 2022-01-01 to 2024-12-31
+Threshold: 1.00%
+Initial Cash: $10,000.00
+
+----------------------------------------------------------------------
+RESULTS
+----------------------------------------------------------------------
+Initial Value                    10000.00
+Final Value                      16865.98
+Total Return                       68.66%
+Annualized Return                  19.17%
+Annualized Volatility              23.33%
+Sharpe Ratio                         0.87
+Max Drawdown                      -29.87%
+======================================================================
