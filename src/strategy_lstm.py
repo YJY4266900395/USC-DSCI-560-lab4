@@ -29,7 +29,7 @@ def set_seed(seed=42):
 
 class LSTMModel(nn.Module):
     """
-    PyTorch LSTM model for stock price prediction (STABLE VERSION)
+    PyTorch LSTM model for stock price prediction
     
     Architecture:
       - LSTM Layer 1 (50 units) + Dropout(0.2)
@@ -60,9 +60,7 @@ class LSTMModel(nn.Module):
         self._initialize_weights()
         
     def _initialize_weights(self):
-        """
-        Xavier/He initialization for LSTM weights for stability
-        """
+        # Xavier/He initialization for LSTM weights for stability
         for name, param in self.lstm.named_parameters():
             if 'weight_ih' in name:
                 nn.init.xavier_uniform_(param.data)
@@ -87,20 +85,25 @@ class LSTMModel(nn.Module):
 def create_sequences(data, window_size=30):
     """
     Create sliding window sequences for LSTM
+    Predicts percentage change instead of absolute price
     
     Args:
         data: 1D array of prices
         window_size: look-back window
     
     Returns:
-        X: (n_samples, window_size, 1)
-        y: (n_samples, 1)
+        X: (n_samples, window_size, 1) - price sequences
+        y: (n_samples, 1) - next-day percentage change
     """
-    X, y = [], []
-    for i in range(len(data) - window_size):
-        X.append(data[i:i+window_size])
-        y.append(data[i+window_size])
-    return np.array(X), np.array(y)
+    # X, y = [], []
+    # for i in range(len(data) - window_size):
+    #     X.append(data[i:i+window_size])
+    #     # y = percentage change from last price in window to next price
+    #     pct_change = (data[i+window_size] - data[i+window_size-1]) / data[i+window_size-1]
+    #     y.append(pct_change)
+    # return np.array(X), np.array(y)
+    # MOVE TO TRAINING FUNCTION FOR BETTER CONTROL
+    pass
 
 
 def train_lstm(
@@ -115,7 +118,7 @@ def train_lstm(
     min_delta=1e-6
 ):
     """
-    Train LSTM model on price data using PyTorch
+    Train LSTM model on price data
     
     Args:
         price_series: pandas Series of prices
@@ -123,13 +126,13 @@ def train_lstm(
         epochs: training epochs
         batch_size: batch size
         verbose: verbosity level
-        seed: random seed for reproducibility
-        learning_rate: initial learning rate (lowered for stability)
+        seed: random seed
+        learning_rate: initial learning rate
         patience: early stopping patience
         min_delta: minimum change to qualify as improvement
     
     Returns:
-        model: trained PyTorch model
+        model: trained model
         scaler: MinMaxScaler for inverse transform
         train_size: number of training samples
         device: torch device
@@ -144,20 +147,29 @@ def train_lstm(
     
     # Normalize data
     scaler = MinMaxScaler(feature_range=(0, 1))
-    scaled_data = scaler.fit_transform(price_series.values.reshape(-1, 1))
+    scaled_prices = scaler.fit_transform(price_series.values.reshape(-1, 1)).flatten()
     
-    # Create sequences
-    X, y = create_sequences(scaled_data.flatten(), window_size)
+    # Create sequences - moved to here!
+    X, y = [], []
+    original_prices = price_series.values
+    
+    for i in range(len(scaled_prices) - window_size):
+        # X: normalized price window
+        X.append(scaled_prices[i:i+window_size])
+        
+        # y: percentage change on ORIGINAL prices (not normalized)
+        pct_change = (original_prices[i+window_size] - original_prices[i+window_size-1]) / original_prices[i+window_size-1]
+        y.append(pct_change)
+
+    X = np.array(X)
+    y = np.array(y)
     
     # Reshape for LSTM: (samples, time_steps, features)
     X = X.reshape(X.shape[0], X.shape[1], 1)
     
-    # Train/test split (80/20)
-    train_size = int(len(X) * 0.8)
-    X_train = torch.FloatTensor(X[:train_size]).to(device)
-    y_train = torch.FloatTensor(y[:train_size]).reshape(-1, 1).to(device)
-    X_test = torch.FloatTensor(X[train_size:]).to(device)
-    y_test = torch.FloatTensor(y[train_size:]).reshape(-1, 1).to(device)
+    # Use all data to train (no train/test split - backtest is the real test)
+    X_train = torch.FloatTensor(X).to(device)
+    y_train = torch.FloatTensor(y).reshape(-1, 1).to(device)
     
     # Build model
     model = LSTMModel(
@@ -180,7 +192,7 @@ def train_lstm(
     )
     
     print(f"Training LSTM model... (epochs={epochs}, lr={learning_rate:.6f}, seed={seed})")
-    print(f"Stability features: Gradient Clipping + LR Scheduler + Early Stopping")
+    print(f"Predicting: Next-day percentage change")
     
     # Early stopping variables
     best_loss = float('inf')
@@ -204,23 +216,17 @@ def train_lstm(
         optimizer.zero_grad()
         loss.backward()
         
-        # Gradient clipping
+        # Gradient clipping (prevent gradient explosion)
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
         
         optimizer.step()
         
-        # Validation loss
-        model.eval()
-        with torch.no_grad():
-            val_outputs = model(X_test)
-            val_loss = criterion(val_outputs, y_test)
-        
         # Learning rate scheduling
-        scheduler.step(val_loss)
+        scheduler.step(loss)
         
         # Early stopping check
-        if val_loss < best_loss - min_delta:
-            best_loss = val_loss
+        if loss.item() < best_loss - min_delta:
+            best_loss = loss.item()
             patience_counter = 0
             best_model_state = model.state_dict().copy()
         else:
@@ -229,9 +235,8 @@ def train_lstm(
         # Print progress
         if (epoch + 1) % 10 == 0:
             current_lr = optimizer.param_groups[0]['lr']
-            print(f"  Epoch [{epoch+1}/{epochs}] | Train Loss: {loss.item():.6f} | "
-                  f"Val Loss: {val_loss.item():.6f} | LR: {current_lr:.7f} | "
-                  f"Patience: {patience_counter}/{patience}")
+            print(f"  Epoch [{epoch+1}/{epochs}] | Loss: {loss.item():.6f} | "
+                  f"LR: {current_lr:.7f} | Patience: {patience_counter}/{patience}")
         
         # Early stopping
         if patience_counter >= patience:
@@ -246,19 +251,18 @@ def train_lstm(
     # Final evaluation
     model.eval()
     with torch.no_grad():
-        train_pred = model(X_train)
-        test_pred = model(X_test)
-        train_loss = criterion(train_pred, y_train).item()
-        test_loss = criterion(test_pred, y_test).item()
+        final_pred = model(X_train)
+        final_loss = criterion(final_pred, y_train).item()
     
-    print(f"Final Training MSE: {train_loss:.6f} | Final Test MSE: {test_loss:.6f}")
+    print(f"Final Training Loss: {final_loss:.6f}")
     
-    return model, scaler, train_size, device
+    return model, scaler, len(X), device
 
 
 def predict_with_lstm(model, scaler, price_series: pd.Series, window_size=30, device='cpu'):
     """
     Generate predictions for entire series
+    Model predicts percentage change, convert to price
     
     Returns:
         predictions: array of predicted prices (same length as input)
@@ -276,8 +280,14 @@ def predict_with_lstm(model, scaler, price_series: pd.Series, window_size=30, de
         for i in range(window_size, len(scaled_data)):
             window = scaled_data[i-window_size:i].reshape(1, window_size, 1)
             window_tensor = torch.FloatTensor(window).to(device)
-            pred_scaled = model(window_tensor).cpu().numpy()[0][0]
-            pred_price = scaler.inverse_transform([[pred_scaled]])[0][0]
+            
+            # Model predicts percentage change
+            pred_pct_change = model(window_tensor).cpu().numpy()[0][0]
+            
+            # Convert to predicted price: current_price * (1 + predicted_change)
+            current_price = price_series.iloc[i]
+            pred_price = current_price * (1 + pred_pct_change)
+            
             predictions.append(pred_price)
     
     return np.array(predictions)
@@ -357,7 +367,7 @@ def lstm_strategy(
     patience=15
 ) -> pd.DataFrame:
     """
-    Complete LSTM trading strategy pipeline (STABLE VERSION)
+    Complete LSTM trading strategy pipeline
     
     Args:
         price: price series with datetime index
@@ -365,8 +375,8 @@ def lstm_strategy(
         epochs: training epochs
         threshold: return threshold for signal generation
         verbose: training verbosity
-        seed: random seed for reproducibility
-        learning_rate: initial learning rate (lowered for stability)
+        seed: random seed
+        learning_rate: initial learning rate
         patience: early stopping patience
     
     Returns:

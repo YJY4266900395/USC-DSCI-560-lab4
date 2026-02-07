@@ -175,7 +175,7 @@ def main():
         "--epochs",
         type=int,
         default=100,
-        help="LSTM training epochs (default: 50)"
+        help="LSTM training epochs (default: 100)"
     )
     parser.add_argument(
         "--threshold",
@@ -195,13 +195,13 @@ def main():
         "--base_alloc",
         type=float,
         default=0.30,
-        help="Base allocation per trade (default: 0.20 = 20%%)"
+        help="Base allocation per trade (default: 0.30 = 30%%)"
     )
     parser.add_argument(
         "--conf_bonus",
         type=float,
         default=0.20,
-        help="Max confidence bonus (default: 0.10 = 10%%)"
+        help="Max confidence bonus (default: 0.20 = 20%%)"
     )
     
     # Output parameters

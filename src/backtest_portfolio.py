@@ -4,12 +4,6 @@ Purpose:
   Multi-stock portfolio backtesting with shared cash pool.
   Implements "base allocation + confidence bonus" strategy.
 
-Key Features:
-  - Shared cash pool across all stocks
-  - Base allocation: 20% of available cash per buy signal
-  - Confidence bonus: up to +10% based on LSTM confidence
-  - Long-only strategy (no short selling)
-
 Trading Logic:
   - When BUY signal: allocate (20% + confidence*10%) of available cash
   - When SELL signal: sell all shares of that stock
@@ -27,8 +21,8 @@ import numpy as np
 def backtest_portfolio(
     signals_dict: dict,
     initial_cash: float = 10000.0,
-    base_allocation: float = 0.20,  # 20% base
-    confidence_bonus: float = 0.10   # up to 10% bonus
+    base_allocation: float = 0.30,  # 30% base
+    confidence_bonus: float = 0.20   # up to 20% bonus
 ):
     """
     Backtest multi-stock portfolio with confidence-based allocation
@@ -36,8 +30,8 @@ def backtest_portfolio(
     Args:
         signals_dict: {ticker: DataFrame with ['price', 'trade', 'confidence']}
         initial_cash: starting capital
-        base_allocation: base % of cash to allocate on BUY (e.g., 0.20 = 20%)
-        confidence_bonus: max bonus % based on confidence (e.g., 0.10 = 10%)
+        base_allocation: base % of cash to allocate on BUY
+        confidence_bonus: max bonus % based on confidence
     
     Returns:
         portfolio_df: DataFrame with portfolio value over time
